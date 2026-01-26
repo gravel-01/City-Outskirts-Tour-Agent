@@ -53,7 +53,7 @@ class ReactAgent:
             return response_text.split("最终答案：")[-1].strip()
         return response_text
 
-    def run(self, query: str, max_iterations: int = 3, verbose: bool = True) -> str:
+    def run(self, query: str, max_iterations: int = 20, verbose: bool = True) -> str:
         """运行 ReAct Agent
 
         Args:
@@ -69,20 +69,20 @@ class ReactAgent:
         # 绿色ANSI颜色代码
         GREEN = "\033[92m"
         RESET = "\033[0m"
-
+        raw_response = ""
         if verbose:
             print(f"{GREEN}[ReAct Agent] 开始处理问题: {query}{RESET}")
-
+            raw_response += f"[ReAct Agent] 开始处理问题: {query}"
         for iteration in range(max_iterations):
             if verbose:
                 print(f"{GREEN}[ReAct Agent] 第 {iteration + 1} 次思考...{RESET}")
-
+                raw_response += f"\n[ReAct Agent] 第 {iteration + 1} 次思考..."
             # 获取模型响应
             response = self.model.generate(chat_history)
 
             if verbose:
                 print(f"{GREEN}[ReAct Agent] 模型响应:\n{response}{RESET}")
-
+                raw_response += f"\n[ReAct Agent] 模型响应:\n{response}"
             chat_history.append({"role": "assistant", "content": response})
             # 解析行动
             action, action_input = self._parse_action(response, verbose=verbose)
@@ -91,7 +91,8 @@ class ReactAgent:
                 final_answer = self._format_response(response)
                 if verbose:
                     print(f"{GREEN}[ReAct Agent] 任务完成{RESET}")
-                return final_answer
+                    raw_response += f"\n[ReAct Agent] 任务完成"
+                return final_answer, raw_response
 
             if verbose:
                 print(
@@ -118,8 +119,10 @@ if __name__ == "__main__":
     api_key = os.getenv("DEEPSEEK_API_KEY")
     url = "https://api.deepseek.com/v1"
     agent = ReactAgent(api_key=api_key, url=url)
-
-    response = agent.run(
-        "美国最近一次阅兵的原因有哪些？", max_iterations=3, verbose=True
-    )
-    print("最终答案：", response)
+    city_info = agent.tools._tools_map["get_city"]()
+    city_name = city_info[0].get("city")
+    print("当前定位城市：", city_name)
+    # response = agent.run(
+    #     "美国最近一次阅兵的原因有哪些？", max_iterations=3, verbose=True
+    # )
+    # print("最终答案：", response)

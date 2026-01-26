@@ -27,7 +27,6 @@ def render_assistant_response(text):
     """
     解析 Agent 的回复，如果里面有地图 URL，则渲染成图片组件
     """
-    # 【核心修复点 1】修改正则：
     # [^)\s]+ 表示匹配除了 "右括号 )" 和 "空白字符" 之外的所有字符
     # 这样就能把 key=<用户的密钥> 完整抓取下来了
     map_url_pattern = r"(https://restapi\.amap\.com/v3/staticmap\?[^)\s]+)"
@@ -37,7 +36,6 @@ def render_assistant_response(text):
     if match:
         full_url = match.group(1)  # 获取匹配到的 URL 完整部分
 
-        # 【核心修复点 2】更强力的 Key 找回机制
         # 只要发现 URL 里包含 <...> 或者 key 不完整，就强行替换
         if "<" in full_url or "key=" not in full_url or "用户的密钥" in full_url:
             # 从环境变量重新获取 Key
@@ -66,6 +64,33 @@ def render_assistant_response(text):
         st.markdown(text)
 
 
+def get_think_response(text):
+    """
+    提取完整思考链：从第一个 '思考：' 开始，一直到 '最终答案：' 之前的所有内容。
+    包含中间的 行动、观察 和 后续的思考。
+    """
+    if not text:
+        return None
+
+    # 正则解释：
+    # 1. (思考：[\s\S]*?)  -> 捕获组1：以"思考："开头，匹配任意字符([\s\S])，非贪婪模式(*?)
+    # 2. (?=最终答案：|$) -> 正向先行断言：匹配直到遇见"最终答案："或者"字符串结尾"为止
+    #                      注意：(?=...) 只做检查，不把"最终答案："这几个字包含在返回结果里
+    think_pattern = r"(思考：[\s\S]*?)(?=最终答案：|$)"
+
+    match = re.search(think_pattern, text)
+
+    if match:
+        return match.group(1).strip()
+
+    # 兜底逻辑：如果文本里有 "思考：" 但正则没匹配上（极其罕见），或者没有 "最终答案"，
+    # 为了防止返回 None 导致界面空白，尝试直接截取
+    if "思考：" in text and "最终答案：" in text:
+        return text.split("最终答案：")[0].strip()
+
+    return None
+
+
 # 2.2 初始化 Agent和critic Agent
 agent = get_agent()
 critic_agent = get_agent()
@@ -91,8 +116,8 @@ with st.sidebar:
     if "init_location" not in st.session_state:
         # 获取初始 IP 定位
         city_info = agent.tools._tools_map["get_city"]()
-        st.session_state.init_province = city_info[0]["city"]
-        st.session_state.init_city = ""
+        st.session_state.init_province = city_info[0].get("province")
+        st.session_state.init_city = city_info[0].get("city")
         st.session_state.init_location = True
 
     # --- 第二步：层级联动选择器（放在 Form 外，保证实时刷新） ---
@@ -219,24 +244,24 @@ if query := st.chat_input("今天的行程的灵感？"):
         st.markdown(query)
     st.session_state.messages.append({"role": "user", "content": query})
 
-    # --- 【核心修改开始】：构建带上下文的 Prompt ---
     # 如果侧边栏有确定的位置，将其作为系统提示前缀加到 query 中
     context_prefix = ""
     if "address_name" in st.session_state:
         context_prefix = f"【系统提示：用户当前所在的精确位置是：{st.session_state.address_name}。请基于此位置回答。】\n"
 
     full_prompt = context_prefix + query
-    # --- 【核心修改结束】 ---
 
     # 2. 展示 Assistant 响应
     with st.chat_message("assistant"):
+        response_text, raw_think_response = agent.run(full_prompt, verbose=True)
         with st.status("Agent 正在深度思考并调用工具...", expanded=True) as status:
+            st.markdown(raw_think_response)
             # 注意：这里传给 Agent 的是 full_prompt (带位置信息)，而不是原始 query
-            response_text = agent.run(full_prompt, verbose=True)
             status.update(label="思考完成！", state="complete", expanded=False)
-
-        # 调用渲染函数
-        render_assistant_response(response_text)
+            # 调用渲染函数
+        with st.spinner("正在渲染最终回答..."):
+            render_assistant_response(response_text)
+    #
 
     # 注意：存入历史记录时，建议只存 response_text，保持纯净
     st.session_state.messages.append({"role": "assistant", "content": response_text})
