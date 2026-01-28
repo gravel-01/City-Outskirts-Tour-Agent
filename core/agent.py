@@ -69,10 +69,13 @@ class ReactAgent:
         # 绿色ANSI颜色代码
         GREEN = "\033[92m"
         RESET = "\033[0m"
+
+        # raw_response 里会包含所有的中间过程, final_thought_response 是通过正则匹配后优化并且展示给user最终的思考内容
         raw_response = ""
+        final_thought_response = ""
         if verbose:
             print(f"{GREEN}[ReAct Agent] 开始处理问题: {query}{RESET}")
-            raw_response += f"[ReAct Agent] 开始处理问题: {query}"
+            raw_response += f"\n[ReAct Agent] 开始处理问题: {query}"
         for iteration in range(max_iterations):
             if verbose:
                 print(f"{GREEN}[ReAct Agent] 第 {iteration + 1} 次思考...{RESET}")
@@ -92,7 +95,11 @@ class ReactAgent:
                 if verbose:
                     print(f"{GREEN}[ReAct Agent] 任务完成{RESET}")
                     raw_response += f"\n[ReAct Agent] 任务完成"
-                return final_answer, raw_response
+
+                final_thought_response = re.sub(
+                    re.escape(final_answer), "🧱", raw_response
+                ).strip()
+                return final_answer, [raw_response, final_thought_response]
 
             if verbose:
                 print(

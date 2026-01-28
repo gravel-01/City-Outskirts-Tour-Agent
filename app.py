@@ -9,10 +9,10 @@ sys.path.append(os.path.join(current_dir, "core"))
 
 from core.agent import ReactAgent  # 确保路径正确
 
-# 1. 页面配置
+# 页面配置
 st.set_page_config(page_title="灵感旅途", page_icon="🌍", layout="wide")
 
-# 2.1 加载环境变量
+# 加载环境变量
 load_dotenv()
 
 
@@ -91,11 +91,11 @@ def get_think_response(text):
     return None
 
 
-# 2.2 初始化 Agent和critic Agent
+# 初始化 Agent和critic Agent
 agent = get_agent()
 critic_agent = get_agent()
 
-# 3. 初始化 Session State
+#  初始化 Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -105,14 +105,14 @@ with st.sidebar:
     if st.button("清空对话历史"):
         st.session_state.messages = []
         st.rerun()
-    st.markdown("---")
+    st.markdown(" ")
     st.markdown("### 🤖 状态")
     st.success("Agent 已就绪")
 
 with st.sidebar:
     st.header("📍 精确位置设置")
 
-    # --- 第一步：初始化省市信息（仅在初次加载时执行） ---
+    #  初始化省市信息（仅在初次加载时执行）
     if "init_location" not in st.session_state:
         # 获取初始 IP 定位
         city_info = agent.tools._tools_map["get_city"]()
@@ -120,7 +120,7 @@ with st.sidebar:
         st.session_state.init_city = city_info[0].get("city")
         st.session_state.init_location = True
 
-    # --- 第二步：层级联动选择器（放在 Form 外，保证实时刷新） ---
+    #   层级联动选择器（放在 Form 外，保证实时刷新）
 
     # 1. 省份选择
     provinces = agent.tools._tools_map["get_districts"]("中国", 1)
@@ -145,7 +145,7 @@ with st.sidebar:
         "3. 选择区域/县", options=districts if districts else ["全境"]
     )
 
-    # --- 第三步：详细地址与确认提交（放在 Form 内） ---
+    #   详细地址与确认提交（放在 Form 内）
     with st.form("address_form"):
         detail_addr = st.text_input("4. 详细地址", placeholder="如：解放路 108 号")
 
@@ -174,9 +174,9 @@ with st.sidebar:
         st.divider()
         st.info(f"当前服务地址：\n{st.session_state.address_name}")
 
-    # --- 请将此代码段放在 app.py 的侧边栏 (with st.sidebar:) 内部的最下方 ---
+    #   请将此代码段放在 app.py 的侧边栏 (with st.sidebar:) 内部的最下方
 
-    st.markdown("---")
+    st.markdown(" ")
     st.header("🛠️ 调试工具 (Debug)")
 
     if st.button("开始图片测试"):
@@ -224,14 +224,13 @@ with st.sidebar:
                 st.error(f"❌ 高德地图加载失败: {e}")
                 st.warning("请尝试复制上面的 URL 到浏览器中打开，看看报错信息是什么？")
 
-# 5. 主界面
+#  主界面
 st.title("🌍 灵感旅途")
 
 
 # 展示对话历史
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        # 【修改点2】如果是 assistant 的消息，使用渲染函数；用户消息保持原样
         if message["role"] == "assistant":
             render_assistant_response(message["content"])
         else:
@@ -239,7 +238,7 @@ for message in st.session_state.messages:
 
 # 用户输入
 if query := st.chat_input("今天的行程的灵感？"):
-    # 1. 展示用户消息
+    # 展示用户消息
     with st.chat_message("user"):
         st.markdown(query)
     st.session_state.messages.append({"role": "user", "content": query})
@@ -251,17 +250,21 @@ if query := st.chat_input("今天的行程的灵感？"):
 
     full_prompt = context_prefix + query
 
-    # 2. 展示 Assistant 响应
+    # 展示 Assistant 响应
     with st.chat_message("assistant"):
-        response_text, raw_think_response = agent.run(full_prompt, verbose=True)
         with st.status("Agent 正在深度思考并调用工具...", expanded=True) as status:
-            st.markdown(raw_think_response)
+            response_text, thought_list = agent.run(full_prompt, verbose=True)
+            st.markdown(thought_list[1])
             # 注意：这里传给 Agent 的是 full_prompt (带位置信息)，而不是原始 query
             status.update(label="思考完成！", state="complete", expanded=False)
             # 调用渲染函数
         with st.spinner("正在渲染最终回答..."):
             render_assistant_response(response_text)
-    #
+
+    # 处理模型的回复的全部信息，得到有用的信息
+    raw_response = thought_list[0]
+    # TODO:后续补充
+    pass
 
     # 注意：存入历史记录时，建议只存 response_text，保持纯净
     st.session_state.messages.append({"role": "assistant", "content": response_text})
