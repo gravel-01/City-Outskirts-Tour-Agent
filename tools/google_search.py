@@ -12,7 +12,6 @@ def google_search(search_query: str) -> str:
     # 1. 准备请求数据
     payload = json.dumps({"q": search_query})
     api_key = os.getenv("SERPER_API_KEY")
-    print(api_key)
     headers = {
         "X-API-KEY": api_key,
         "Content-Type": "application/json",
